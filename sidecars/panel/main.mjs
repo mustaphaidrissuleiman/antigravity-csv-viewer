@@ -1,12 +1,19 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || join(HERE, '.data');
 const STATE_FILE = join(DATA_DIR, 'state.json');
+
+const CSV_EXTS = new Set(['.csv', '.tsv', '.tab', '.dsv']);
+
+function isCsvFile(filename) {
+  if (!filename || typeof filename !== 'string') return false;
+  return CSV_EXTS.has(extname(filename).toLowerCase());
+}
 
 const app = new SidecarApp();
 
@@ -94,15 +101,15 @@ function resolveFilePath(inputPath, workspaceUris = []) {
     cleaned = join(homedir(), cleaned.slice(2));
   }
 
-  // 1. Direct path check
-  if (existsSync(cleaned) && statSync(cleaned).isFile()) {
+  // 1. Direct path check (must be CSV/TSV)
+  if (existsSync(cleaned) && statSync(cleaned).isFile() && isCsvFile(cleaned)) {
     return cleaned;
   }
 
   // 2. URL-decoded path check
   try {
     const decoded = decodeURIComponent(cleaned);
-    if (existsSync(decoded) && statSync(decoded).isFile()) {
+    if (existsSync(decoded) && statSync(decoded).isFile() && isCsvFile(decoded)) {
       return decoded;
     }
   } catch {}
@@ -130,11 +137,11 @@ function resolveFilePath(inputPath, workspaceUris = []) {
     if (!existsSync(base)) continue;
     try {
       const candidate = join(base, cleaned);
-      if (existsSync(candidate) && statSync(candidate).isFile()) {
+      if (existsSync(candidate) && statSync(candidate).isFile() && isCsvFile(candidate)) {
         return candidate;
       }
       const decodedCandidate = join(base, decodeURIComponent(cleaned));
-      if (existsSync(decodedCandidate) && statSync(decodedCandidate).isFile()) {
+      if (existsSync(decodedCandidate) && statSync(decodedCandidate).isFile() && isCsvFile(decodedCandidate)) {
         return decodedCandidate;
       }
     } catch {}
@@ -142,7 +149,7 @@ function resolveFilePath(inputPath, workspaceUris = []) {
 
   // 4. Fuzzy fallback: search by basename in candidate bases
   const targetBaseName = basename(cleaned);
-  if (targetBaseName) {
+  if (targetBaseName && isCsvFile(targetBaseName)) {
     for (const base of candidateBases) {
       if (!existsSync(base)) continue;
       const found = searchForFileByName(base, targetBaseName, 4);
@@ -246,8 +253,8 @@ app.api('/api/workspace-csvs', (data) => {
 
 app.api('/api/raw-csv', (data) => {
   const resolved = resolveFilePath(data?.path, data?.workspaceUris);
-  if (!resolved) {
-    return new Response(JSON.stringify({ error: `File not found: ${data?.path || ''}` }), {
+  if (!resolved || !isCsvFile(resolved)) {
+    return new Response(JSON.stringify({ error: `File not found or not a CSV/TSV: ${data?.path || ''}` }), {
       contentType: 'application/json',
       status: 404,
     });
@@ -267,8 +274,8 @@ app.api('/api/load-csv', (data) => {
 
   try {
     const resolved = resolveFilePath(inputPath, data?.workspaceUris);
-    if (!resolved) {
-      return { success: false, error: `File not found: ${inputPath}` };
+    if (!resolved || !isCsvFile(resolved)) {
+      return { success: false, error: `File not found or not a CSV/TSV: ${inputPath}` };
     }
 
     const st = statSync(resolved);
