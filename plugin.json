@@ -1,0 +1,12 @@
+{
+  "name": "csv-viewer",
+  "displayName": "CSV Viewer",
+  "version": "1.0.0",
+  "description": "Interactive CSV & TSV data viewer in the side panel with search, column sorting, statistics, filtering, and agent analysis.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Open the CSV viewer in the side panel",
+    "Analyze the open CSV dataset",
+    "Find all CSV files in my workspace"
+  ]
+}

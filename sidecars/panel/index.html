@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/preload.js"></script>
+  <script src="/lib/papaparse.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Top Navigation -->
+    <header class="top-nav">
+      <div class="top-nav-left">
+        <div class="app-title-group">
+          <svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3h18v18H3z"/>
+            <path d="M3 9h18"/>
+            <path d="M3 15h18"/>
+            <path d="M9 3v18"/>
+            <path d="M15 3v18"/>
+          </svg>
+          <span>CSV Viewer</span>
+        </div>
+        <div id="fileBadge" class="file-badge" hidden>
+          <span id="badgeFileName" class="file-name">filename.csv</span>
+          <span id="badgeFileSize" class="file-size">0 KB</span>
+        </div>
+      </div>
+      <div class="top-nav-right">
+        <button id="openFileBtn" class="btn btn-sm" title="Open CSV/TSV from disk">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Open</span>
+        </button>
+        <button id="askAgentBtn" class="btn btn-sm btn-agent" title="Ask Agent about this dataset">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+            <rect x="4" y="8" width="16" height="12" rx="2"/>
+            <path d="M9 13v2"/>
+            <path d="M15 13v2"/>
+          </svg>
+          <span>Ask Agent</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Sub Toolbar (Active when CSV is loaded) -->
+    <div id="subToolbar" class="sub-toolbar" hidden>
+      <div class="search-container">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Search table..." autocomplete="off">
+        <button id="clearSearchBtn" class="search-clear-btn" hidden title="Clear search">✕</button>
+      </div>
+
+      <div class="toolbar-controls">
+        <select id="delimiterSelect" class="select-control" title="Delimiter">
+          <option value="auto">Delimiter: Auto</option>
+          <option value=",">Comma (,)</option>
+          <option value="&#9;">Tab (\t)</option>
+          <option value=";">Semicolon (;)</option>
+          <option value="|">Pipe (|)</option>
+        </select>
+
+        <button id="headerToggleBtn" class="btn btn-sm" title="Toggle First Row as Header">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span id="headerToggleText">Header: On</span>
+        </button>
+
+        <button id="statsToggleBtn" class="btn btn-sm" title="Show Column Statistics">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <span>Stats</span>
+        </button>
+
+        <select id="exportSelect" class="select-control" title="Export or Copy">
+          <option value="" disabled selected>Export...</option>
+          <option value="copy-csv">Copy as CSV</option>
+          <option value="copy-json">Copy as JSON</option>
+          <option value="download-csv">Download CSV</option>
+          <option value="download-json">Download JSON</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="main-container">
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state">
+        <div id="dropzone" class="dropzone">
+          <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <div class="dropzone-title">Drop CSV or TSV file here</div>
+          <div class="dropzone-desc">Supports commas, tabs, semicolons, and pipes</div>
+          <button id="dropzonePickBtn" class="btn btn-primary btn-sm">Browse Local File</button>
+        </div>
+
+        <div id="workspaceFilesSection" class="workspace-files-section" hidden>
+          <div class="section-label">Workspace Datasets</div>
+          <div id="workspaceFileList" class="file-list"></div>
+        </div>
+      </div>
+
+      <!-- Table View -->
+      <div id="tableWrapper" class="table-wrapper" hidden>
+        <table id="csvTable" class="csv-table">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Statistics Drawer -->
+      <aside id="statsDrawer" class="stats-drawer">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            <span>Column Statistics</span>
+          </div>
+          <button id="closeStatsBtn" class="btn btn-sm btn-icon" title="Close stats">✕</button>
+        </div>
+        <div id="statsBody" class="drawer-body"></div>
+      </aside>
+
+      <!-- Agent Prompt Drawer -->
+      <aside id="agentDrawer" class="agent-drawer">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+              <rect x="4" y="8" width="16" height="12" rx="2"/>
+            </svg>
+            <span>Ask Agent about <span id="agentDrawerDocName">Dataset</span></span>
+          </div>
+          <button id="closeAgentBtn" class="btn btn-sm btn-icon" title="Close">✕</button>
+        </div>
+        <div class="prompt-chips">
+          <button class="chip-btn" data-prompt="Analyze this dataset and give key takeaways, trends, and anomalies.">Key Takeaways & Trends</button>
+          <button class="chip-btn" data-prompt="Generate a Python script using pandas and matplotlib to visualize this dataset.">Python Visualization Script</button>
+          <button class="chip-btn" data-prompt="Check this dataset for missing values, duplicates, and data quality issues.">Data Quality Check</button>
+          <button class="chip-btn" data-prompt="Summarize the column distributions and suggest suitable statistical models or next steps.">Statistical Summary</button>
+        </div>
+        <div class="prompt-input-row">
+          <textarea id="agentPromptInput" class="prompt-textarea" placeholder="Ask anything about this dataset..."></textarea>
+          <button id="sendAgentPromptBtn" class="btn btn-primary btn-sm">Send</button>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Pagination Footer -->
+    <footer id="paginationBar" class="pagination-bar" hidden>
+      <div id="paginationInfo" class="pagination-info">Showing 0 rows</div>
+      <div class="pagination-controls">
+        <label for="pageSizeSelect" style="color:var(--muted-foreground); margin-right:4px;">Rows:</label>
+        <select id="pageSizeSelect" class="select-control">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+          <option value="500">500</option>
+          <option value="all">All</option>
+        </select>
+        <button id="firstPageBtn" class="btn btn-sm btn-icon" title="First page">«</button>
+        <button id="prevPageBtn" class="btn btn-sm btn-icon" title="Previous page">‹</button>
+        <span class="page-num-indicator">
+          <input type="text" id="pageInput" class="page-input" value="1">
+          <span>/ <span id="totalPagesText">1</span></span>
+        </span>
+        <button id="nextPageBtn" class="btn btn-sm btn-icon" title="Next page">›</button>
+        <button id="lastPageBtn" class="btn btn-sm btn-icon" title="Last page">»</button>
+      </div>
+    </footer>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="fileInput" accept=".csv,.tsv,.tab,.dsv,.txt" hidden>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Notification</div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" hidden>
+      <div class="spinner"></div>
+      <span id="loadingMessage">Loading dataset...</span>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
